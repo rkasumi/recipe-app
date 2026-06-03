@@ -1,0 +1,27 @@
+services:
+  recipe-app:
+    build:
+      context: .
+    image: recipe-app:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      HOST: 0.0.0.0
+      DATA_DIR: /data
+      RECIPES_DIR: /data/recipes
+      RECIPE_DB_PATH: /data/recipes.sqlite
+    ports:
+      - "${RECIPE_APP_HOST_PORT:-8080}:8080"
+    volumes:
+      - recipe-app-data:/data
+    user: "${RECIPE_APP_UID:-1000}:${RECIPE_APP_GID:-1000}"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  recipe-app-data:

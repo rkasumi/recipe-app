@@ -1,0 +1,39 @@
+{
+  "recipe_id": "oyakodon-basic",
+  "source_note_path": "fixtures/source-notes/oyakodon-note.md",
+  "recipe_json_path": "fixtures/recipes/oyakodon.json",
+  "schema_validation": {
+    "ok": true,
+    "findings": []
+  },
+  "source_fidelity": {
+    "ok": true,
+    "findings": [
+      "手入力メモにある材料、分量、加熱順序を保持した。",
+      "三つ葉は「あれば」の任意材料として記録した。"
+    ]
+  },
+  "ingredient_step_audit": {
+    "ok": true,
+    "findings": [
+      "各手順の ingredients は ingredients[].items[].id を参照している。",
+      "火加減が明記された工程は heat に記録している。"
+    ]
+  },
+  "flow_audit": {
+    "ok": true,
+    "findings": [
+      "flow node は材料ブロック、調理アクション、待ち、完成を含む。",
+      "全 edge は存在する node を参照している。"
+    ]
+  },
+  "needs_review": false,
+  "review_reasons": [],
+  "subagent": {
+    "used": false,
+    "reason": "この fixture 作成時点では同一スレッドで親 Codex が source fidelity、ingredient/step、flow の観点を代替監査した。",
+    "substitute_audit_by": "parent-codex"
+  },
+  "created_at": "2026-06-02T00:00:00.000Z"
+}
+

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.tmp/
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-*
+*.db
+.env
+.env.*
+!.env.example
+data/
+/recipes/
+/source-notes/
+/import-logs/

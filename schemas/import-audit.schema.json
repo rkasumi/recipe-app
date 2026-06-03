@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:recipe-app:schemas:import-audit",
+  "title": "RecipeImportAuditReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recipe_id",
+    "source_note_path",
+    "recipe_json_path",
+    "schema_validation",
+    "source_fidelity",
+    "ingredient_step_audit",
+    "flow_audit",
+    "needs_review",
+    "review_reasons",
+    "subagent",
+    "created_at"
+  ],
+  "properties": {
+    "recipe_id": {
+      "type": "string"
+    },
+    "source_note_path": {
+      "type": "string"
+    },
+    "recipe_json_path": {
+      "type": "string"
+    },
+    "schema_validation": {
+      "$ref": "#/$defs/check"
+    },
+    "source_fidelity": {
+      "$ref": "#/$defs/check"
+    },
+    "ingredient_step_audit": {
+      "$ref": "#/$defs/check"
+    },
+    "flow_audit": {
+      "$ref": "#/$defs/check"
+    },
+    "needs_review": {
+      "type": "boolean"
+    },
+    "review_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "subagent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["used", "reason", "substitute_audit_by"],
+      "properties": {
+        "used": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "substitute_audit_by": {
+          "type": "string"
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "findings"],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

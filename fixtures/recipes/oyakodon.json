@@ -1,0 +1,277 @@
+{
+  "id": "oyakodon-basic",
+  "title": "親子丼",
+  "servings": {
+    "amount": 2,
+    "unit": "人分",
+    "label": "2人分"
+  },
+  "source_refs": [
+    {
+      "id": "src-manual-note",
+      "type": "manual_note",
+      "title": "親子丼メモ",
+      "note": "fixtures/source-notes/oyakodon-note.md"
+    }
+  ],
+  "ingredients": [
+    {
+      "id": "main",
+      "title": "主材料",
+      "items": [
+        {
+          "id": "chicken-thigh",
+          "name": "鶏もも肉",
+          "quantity": "200",
+          "unit": "g",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "onion",
+          "name": "玉ねぎ",
+          "quantity": "1/2",
+          "unit": "個",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "egg",
+          "name": "卵",
+          "quantity": "2",
+          "unit": "個",
+          "note": "溶いて使う",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "rice",
+          "name": "ご飯",
+          "quantity": "2",
+          "unit": "膳",
+          "source_ref_id": "src-manual-note"
+        }
+      ]
+    },
+    {
+      "id": "sauce",
+      "title": "煮汁",
+      "items": [
+        {
+          "id": "dashi",
+          "name": "だし",
+          "quantity": "150",
+          "unit": "ml",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "soy-sauce",
+          "name": "しょうゆ",
+          "quantity": "2",
+          "unit": "大さじ",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "mirin",
+          "name": "みりん",
+          "quantity": "2",
+          "unit": "大さじ",
+          "source_ref_id": "src-manual-note"
+        },
+        {
+          "id": "sugar",
+          "name": "砂糖",
+          "quantity": "1",
+          "unit": "小さじ",
+          "source_ref_id": "src-manual-note"
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "title": "仕上げ",
+      "items": [
+        {
+          "id": "mitsuba",
+          "name": "三つ葉",
+          "quantity": "適量",
+          "note": "あれば",
+          "source_ref_id": "src-manual-note"
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "id": "prep-chicken-onion",
+      "order": 1,
+      "title": "下ごしらえ",
+      "instruction": "鶏もも肉を一口大に切り、玉ねぎを薄切りにする。",
+      "ingredients": ["chicken-thigh", "onion"],
+      "source_ref_id": "src-manual-note"
+    },
+    {
+      "id": "mix-sauce",
+      "order": 2,
+      "title": "煮汁を合わせる",
+      "instruction": "だし、しょうゆ、みりん、砂糖を合わせる。",
+      "ingredients": ["dashi", "soy-sauce", "mirin", "sugar"],
+      "source_ref_id": "src-manual-note"
+    },
+    {
+      "id": "simmer-onion",
+      "order": 3,
+      "title": "玉ねぎを煮る",
+      "instruction": "フライパンに煮汁と玉ねぎを入れ、中火で玉ねぎが透き通るまで煮る。",
+      "ingredients": ["onion", "dashi", "soy-sauce", "mirin", "sugar"],
+      "heat": "中火",
+      "source_ref_id": "src-manual-note"
+    },
+    {
+      "id": "cook-chicken",
+      "order": 4,
+      "title": "鶏肉に火を通す",
+      "instruction": "鶏もも肉を加え、火が通るまで煮る。",
+      "ingredients": ["chicken-thigh"],
+      "heat": "中火",
+      "source_ref_id": "src-manual-note"
+    },
+    {
+      "id": "add-egg",
+      "order": 5,
+      "title": "卵を入れる",
+      "instruction": "溶き卵を回し入れ、半熟で火を止める。",
+      "ingredients": ["egg"],
+      "source_ref_id": "src-manual-note"
+    },
+    {
+      "id": "serve",
+      "order": 6,
+      "title": "盛り付ける",
+      "instruction": "ご飯に具をのせ、三つ葉があれば飾る。",
+      "ingredients": ["rice", "mitsuba"],
+      "source_ref_id": "src-manual-note"
+    }
+  ],
+  "flow": {
+    "layout": {
+      "direction": "LR",
+      "lane_labels": {
+        "prep": "下ごしらえ",
+        "cook": "加熱",
+        "finish": "仕上げ"
+      }
+    },
+    "nodes": [
+      {
+        "id": "node-main-ingredients",
+        "kind": "ingredient_group",
+        "label": "主材料",
+        "lane": "prep",
+        "rank": 0,
+        "shape": "rectangle",
+        "ingredients": ["chicken-thigh", "onion", "egg", "rice"]
+      },
+      {
+        "id": "node-sauce",
+        "kind": "ingredient_group",
+        "label": "煮汁",
+        "lane": "prep",
+        "rank": 1,
+        "shape": "rectangle",
+        "ingredients": ["dashi", "soy-sauce", "mirin", "sugar"],
+        "step_id": "mix-sauce"
+      },
+      {
+        "id": "node-prep",
+        "kind": "action",
+        "label": "切る",
+        "lane": "prep",
+        "rank": 2,
+        "shape": "pill",
+        "step_id": "prep-chicken-onion",
+        "ingredients": ["chicken-thigh", "onion"]
+      },
+      {
+        "id": "node-simmer",
+        "kind": "action",
+        "label": "玉ねぎを煮る",
+        "lane": "cook",
+        "rank": 3,
+        "shape": "pill",
+        "step_id": "simmer-onion",
+        "ingredients": ["onion"]
+      },
+      {
+        "id": "node-chicken",
+        "kind": "action",
+        "label": "鶏肉に火を通す",
+        "lane": "cook",
+        "rank": 4,
+        "shape": "pill",
+        "step_id": "cook-chicken",
+        "ingredients": ["chicken-thigh"]
+      },
+      {
+        "id": "node-egg",
+        "kind": "wait",
+        "label": "卵を半熟にする",
+        "lane": "cook",
+        "rank": 5,
+        "shape": "pill",
+        "step_id": "add-egg",
+        "ingredients": ["egg"]
+      },
+      {
+        "id": "node-serve",
+        "kind": "finish",
+        "label": "盛り付け",
+        "lane": "finish",
+        "rank": 6,
+        "shape": "circle",
+        "step_id": "serve",
+        "ingredients": ["rice", "mitsuba"]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-sauce-simmer",
+        "source": "node-sauce",
+        "target": "node-simmer"
+      },
+      {
+        "id": "edge-prep-simmer",
+        "source": "node-prep",
+        "target": "node-simmer"
+      },
+      {
+        "id": "edge-simmer-chicken",
+        "source": "node-simmer",
+        "target": "node-chicken"
+      },
+      {
+        "id": "edge-chicken-egg",
+        "source": "node-chicken",
+        "target": "node-egg"
+      },
+      {
+        "id": "edge-egg-serve",
+        "source": "node-egg",
+        "target": "node-serve"
+      }
+    ]
+  },
+  "audit": {
+    "needs_review": false,
+    "warnings": [
+      "三つ葉は任意材料として扱った。"
+    ],
+    "source_fidelity_notes": [
+      "材料、分量、手順は手入力メモに由来する。",
+      "動画、記事、本の全文保存は行っていない。"
+    ],
+    "missing_information": [],
+    "generated_by": "recipe-import sample fixture",
+    "generated_at": "2026-06-02T00:00:00.000Z"
+  },
+  "tags": ["丼", "和食", "家庭用"],
+  "updated_at": "2026-06-02T00:00:00.000Z"
+}
+
