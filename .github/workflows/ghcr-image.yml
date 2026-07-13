@@ -4,7 +4,12 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ jobs:
         with:
           driver: docker
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -31,7 +37,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/rkasumi/recipe-app:latest
             ghcr.io/rkasumi/recipe-app:sha-${{ steps.image.outputs.short_sha }}
