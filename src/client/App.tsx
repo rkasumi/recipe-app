@@ -1,9 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useState } from "react";
 import { Background, Controls, MiniMap, ReactFlow, type Edge, type Node } from "@xyflow/react";
-import type { RecipeDetail, RecipeDocument, RecipeFlowNode, RecipeStep, RecipeSummary } from "../shared/recipe";
+import type { RecipeDetail, RecipeDocument, RecipeFlowNode, RecipeNote, RecipeNoteTarget, RecipeStep, RecipeSummary } from "../shared/recipe";
 import { buildShoppingList } from "./shoppingList";
 
 type Tab = "steps" | "ingredients" | "flow";
+
+interface PersonalNotesContextValue {
+  notes: RecipeNote[];
+  writable: boolean;
+  save: (targetType: RecipeNoteTarget, targetId: string, note: string) => Promise<void>;
+}
+
+const PersonalNotesContext = createContext<PersonalNotesContextValue>({
+  notes: [],
+  writable: false,
+  save: async () => undefined,
+});
 
 export function App() {
   const [query, setQuery] = useState("");
@@ -17,6 +29,8 @@ export function App() {
   const [completedStepIds, setCompletedStepIds] = useState<Set<string>>(new Set());
   const [shoppingRecipeIds, setShoppingRecipeIds] = useState<Set<string>>(new Set());
   const [shoppingListOpen, setShoppingListOpen] = useState(false);
+  const [personalNotes, setPersonalNotes] = useState<RecipeNote[]>([]);
+  const [notesWritable, setNotesWritable] = useState(false);
   const wakeLock = useWakeLock(cookingMode);
 
   useEffect(() => {
@@ -49,6 +63,15 @@ export function App() {
   }, [query]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/capabilities", { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("capabilities fetch failed")))
+      .then((payload: { notesWritable: boolean }) => setNotesWritable(payload.notesWritable))
+      .catch(() => setNotesWritable(false));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       return;
@@ -70,6 +93,42 @@ export function App() {
       });
     return () => controller.abort();
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setPersonalNotes([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/recipes/${encodeURIComponent(selectedId)}/notes`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("notes fetch failed")))
+      .then((payload: { notes: RecipeNote[] }) => setPersonalNotes(payload.notes))
+      .catch((nextError: unknown) => {
+        if ((nextError as Error).name !== "AbortError") {
+          setPersonalNotes([]);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedId]);
+
+  const savePersonalNote = async (targetType: RecipeNoteTarget, targetId: string, note: string): Promise<void> => {
+    if (!selectedId) {
+      throw new Error("recipe is not selected");
+    }
+    const response = await fetch(`/api/recipes/${encodeURIComponent(selectedId)}/notes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetType, targetId, note }),
+    });
+    if (!response.ok) {
+      throw new Error("note save failed");
+    }
+    const payload = await response.json() as { note: RecipeNote | null };
+    setPersonalNotes((current) => {
+      const next = current.filter((item) => item.targetType !== targetType || item.targetId !== targetId);
+      return payload.note ? [...next, payload.note] : next;
+    });
+  };
 
   return (
     <main className={cookingMode ? "app-shell cooking-mode" : "app-shell"}>
@@ -155,8 +214,9 @@ export function App() {
             onClose={() => setShoppingListOpen(false)}
           />
         ) : detail ? (
-          <>
+          <PersonalNotesContext.Provider value={{ notes: personalNotes, writable: notesWritable, save: savePersonalNote }}>
             <RecipeHeader recipe={detail.recipe} />
+            <PersonalNoteEditor targetType="recipe" targetId={detail.id} label="このレシピの自分メモ" />
             <nav className="tab-bar" aria-label="recipe views">
               <button className={tab === "steps" ? "active" : ""} type="button" onClick={() => setTab("steps")}>手順</button>
               <button className={tab === "ingredients" ? "active" : ""} type="button" onClick={() => setTab("ingredients")}>材料</button>
@@ -211,7 +271,7 @@ export function App() {
                 onSelectNode={setSelectedNodeId}
               />
             ) : null}
-          </>
+          </PersonalNotesContext.Provider>
         ) : (
           <div className="empty-state">レシピはまだありません</div>
         )}
@@ -361,6 +421,7 @@ function StepsView({
               {step.duration ? <span>{step.duration}</span> : null}
               {step.note ? <span>{step.note}</span> : null}
             </div>
+            <PersonalNoteEditor targetType="step" targetId={step.id} label="この工程の自分メモ" compact />
           </div>
         </li>
       ))}
@@ -463,17 +524,84 @@ function IngredientsView({ recipe }: { recipe: RecipeDocument }) {
           <table>
             <tbody>
               {group.items.map((item) => (
-                <tr key={item.id}>
-                  <th>{item.name}</th>
-                  <td>{[item.quantity, item.unit].filter(Boolean).join(" ")}</td>
-                  <td>{item.note ?? ""}</td>
-                </tr>
+                <Fragment key={item.id}>
+                  <tr>
+                    <th>{item.name}</th>
+                    <td>{[item.quantity, item.unit].filter(Boolean).join(" ")}</td>
+                    <td>{item.note ?? ""}</td>
+                  </tr>
+                  <tr className="ingredient-personal-note">
+                    <td colSpan={3}>
+                      <PersonalNoteEditor targetType="ingredient" targetId={item.id} label={`${item.name}の自分メモ`} compact />
+                    </td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>
         </section>
       ))}
     </div>
+  );
+}
+
+function PersonalNoteEditor({
+  targetType,
+  targetId,
+  label,
+  compact = false,
+}: {
+  targetType: RecipeNoteTarget;
+  targetId: string;
+  label: string;
+  compact?: boolean;
+}) {
+  const context = useContext(PersonalNotesContext);
+  const savedNote = context.notes.find((item) => item.targetType === targetType && item.targetId === targetId)?.note ?? "";
+  const [value, setValue] = useState(savedNote);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    setValue(savedNote);
+    setStatus("idle");
+  }, [savedNote, targetId, targetType]);
+
+  if (!context.writable && !savedNote) {
+    return null;
+  }
+
+  return (
+    <section className={compact ? "personal-note compact" : "personal-note"}>
+      <label>
+        <span>{label}</span>
+        <textarea
+          value={value}
+          maxLength={2_000}
+          rows={compact ? 2 : 3}
+          readOnly={!context.writable}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setStatus("idle");
+          }}
+        />
+      </label>
+      {context.writable ? (
+        <div>
+          <button
+            type="button"
+            disabled={status === "saving" || value === savedNote}
+            onClick={() => {
+              setStatus("saving");
+              context.save(targetType, targetId, value)
+                .then(() => setStatus("saved"))
+                .catch(() => setStatus("error"));
+            }}
+          >保存</button>
+          {status === "saved" ? <small>保存しました</small> : null}
+          {status === "error" ? <small className="status-error">保存できませんでした</small> : null}
+        </div>
+      ) : <small>書き込みは無効です</small>}
+    </section>
   );
 }
 

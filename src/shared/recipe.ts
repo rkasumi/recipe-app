@@ -126,3 +126,12 @@ export interface HealthStatus {
   dbReady: boolean;
 }
 
+export type RecipeNoteTarget = "recipe" | "ingredient" | "step";
+
+export interface RecipeNote {
+  recipeId: string;
+  targetType: RecipeNoteTarget;
+  targetId: string;
+  note: string;
+  updatedAt: string;
+}

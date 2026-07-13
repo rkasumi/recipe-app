@@ -22,6 +22,8 @@ ENV HOST=0.0.0.0
 ENV DATA_DIR=/data
 ENV RECIPES_DIR=/data/recipes
 ENV RECIPE_DB_PATH=/data/recipes.sqlite
+ENV JOURNAL_DB_PATH=/data/journal.sqlite
+ENV ENABLE_WRITES=false
 
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
@@ -32,4 +34,3 @@ USER node
 EXPOSE 8080
 
 CMD ["node", "dist/server/index.js"]
-

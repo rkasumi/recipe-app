@@ -25,3 +25,19 @@ export function runMigrations(db: Database.Database): void {
   `);
 }
 
+export function runJournalMigrations(db: Database.Database): void {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+
+    CREATE TABLE IF NOT EXISTS recipe_notes (
+      recipe_id TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('recipe', 'ingredient', 'step')),
+      target_id TEXT NOT NULL,
+      note TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (recipe_id, target_type, target_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recipe_notes_recipe_id ON recipe_notes(recipe_id);
+  `);
+}

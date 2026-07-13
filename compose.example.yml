@@ -11,6 +11,8 @@ services:
       DATA_DIR: /data
       RECIPES_DIR: /data/recipes
       RECIPE_DB_PATH: /data/recipes.sqlite
+      JOURNAL_DB_PATH: /data/journal.sqlite
+      ENABLE_WRITES: "false"
     ports:
       - "${RECIPE_APP_HOST_PORT:-8080}:8080"
     volumes:

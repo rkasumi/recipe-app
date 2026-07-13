@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { runMigrations } from "./migrations";
+import { runJournalMigrations, runMigrations } from "./migrations";
 
 export interface AppConfig {
   host: string;
@@ -9,6 +9,8 @@ export interface AppConfig {
   dataDir: string;
   recipesDir: string;
   dbPath: string;
+  journalDbPath: string;
+  enableWrites: boolean;
 }
 
 export type RecipeDatabase = Database.Database;
@@ -25,7 +27,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     dataDir,
     recipesDir: path.resolve(env.RECIPES_DIR ?? path.join(dataDir, "recipes")),
     dbPath: path.resolve(env.RECIPE_DB_PATH ?? path.join(dataDir, "recipes.sqlite")),
+    journalDbPath: path.resolve(env.JOURNAL_DB_PATH ?? path.join(dataDir, "journal.sqlite")),
+    enableWrites: env.ENABLE_WRITES === "true",
   };
+}
+
+export function openJournalDatabase(config: AppConfig): RecipeDatabase {
+  ensureDataDirs(config);
+  const db = new Database(config.journalDbPath);
+  runJournalMigrations(db);
+  return db;
 }
 
 export function openDatabase(config: AppConfig): RecipeDatabase {
@@ -39,4 +50,5 @@ export function ensureDataDirs(config: AppConfig): void {
   fs.mkdirSync(config.dataDir, { recursive: true });
   fs.mkdirSync(config.recipesDir, { recursive: true });
   fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
+  fs.mkdirSync(path.dirname(config.journalDbPath), { recursive: true });
 }

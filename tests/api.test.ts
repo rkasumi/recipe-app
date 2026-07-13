@@ -3,17 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadConfig, openDatabase, type RecipeDatabase } from "../src/db/database";
+import { loadConfig, openDatabase, openJournalDatabase, type RecipeDatabase } from "../src/db/database";
 import { importRecipeFile } from "../src/db/recipes";
 import { createServer, getHealthStatus, getRecipeDetailResponse, getRecipeListResponse } from "../src/server/index";
 
 const fixturePath = path.resolve("fixtures/recipes/oyakodon.json");
 let tempDir: string | null = null;
 let db: RecipeDatabase | null = null;
+let journalDb: RecipeDatabase | null = null;
 
 afterEach(() => {
   db?.close();
   db = null;
+  journalDb?.close();
+  journalDb = null;
   if (tempDir) {
     fs.rmSync(tempDir, { recursive: true, force: true });
     tempDir = null;
@@ -39,13 +42,14 @@ describe("api", () => {
 
   it("serves API routes, JSON 404s, and the SPA fallback", async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "recipe-app-"));
-    const config = loadConfig({ DATA_DIR: tempDir });
+    const config = loadConfig({ DATA_DIR: tempDir, ENABLE_WRITES: "true" });
     db = openDatabase(config);
+    journalDb = openJournalDatabase(config);
     importRecipeFile(db, config, fixturePath, { dryRun: false });
     const clientDist = path.join(tempDir, "client");
     fs.mkdirSync(clientDist);
     fs.writeFileSync(path.join(clientDist, "index.html"), "<!doctype html><title>recipe-app</title>");
-    const app = createServer({ config, db, clientDist });
+    const app = createServer({ config, db, journalDb, clientDist });
 
     await withServer(app, async (baseUrl) => {
       const health = await fetch(`${baseUrl}/health`);
@@ -58,6 +62,35 @@ describe("api", () => {
 
       const detail = await fetch(`${baseUrl}/api/recipes/oyakodon-basic`);
       expect(detail.status).toBe(200);
+
+      const capabilities = await fetch(`${baseUrl}/api/capabilities`);
+      expect(await capabilities.json()).toEqual({ notesWritable: true });
+
+      const savedNote = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "ingredient", targetId: "chicken-thigh", note: "うちでは少し小さめに切る" }),
+      });
+      expect(savedNote.status).toBe(200);
+      expect(await savedNote.json()).toMatchObject({ note: { targetId: "chicken-thigh", note: "うちでは少し小さめに切る" } });
+
+      const notes = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`);
+      expect(await notes.json()).toMatchObject({ notes: [{ targetType: "ingredient", targetId: "chicken-thigh" }] });
+
+      const invalidNote = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "step", targetId: "missing", note: "invalid" }),
+      });
+      expect(invalidNote.status).toBe(400);
+
+      config.enableWrites = false;
+      const disabledWrite = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType: "recipe", targetId: "oyakodon-basic", note: "blocked" }),
+      });
+      expect(disabledWrite.status).toBe(403);
 
       const missingDetail = await fetch(`${baseUrl}/api/recipes/missing`);
       expect(missingDetail.status).toBe(404);
