@@ -4,8 +4,13 @@ set -euo pipefail
 patterns='(CLOUDFLARE_API_TOKEN|CF_API_TOKEN|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password=|passwd=|secret=|token=|webhook_url=)'
 
 set +e
-rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!coverage/**' --glob '!.git/**' --glob '!pnpm-lock.yaml' --glob '!scripts/check-secrets.sh' "$patterns" .
-status=$?
+if command -v rg >/dev/null 2>&1; then
+  rg -n --hidden --glob '!node_modules/**' --glob '!dist/**' --glob '!coverage/**' --glob '!.git/**' --glob '!pnpm-lock.yaml' --glob '!scripts/check-secrets.sh' "$patterns" .
+  status=$?
+else
+  git grep -nE "$patterns" -- . ':(exclude)pnpm-lock.yaml' ':(exclude)scripts/check-secrets.sh'
+  status=$?
+fi
 set -e
 
 if [[ $status -eq 0 ]]; then
@@ -14,7 +19,7 @@ if [[ $status -eq 0 ]]; then
 fi
 
 if [[ $status -ne 1 ]]; then
-  echo "Secret scan failed with rg exit code $status." >&2
+  echo "Secret scan failed with exit code $status." >&2
   exit "$status"
 fi
 
