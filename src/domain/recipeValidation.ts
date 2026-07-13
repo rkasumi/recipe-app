@@ -1,8 +1,9 @@
 import fs from "node:fs";
-import path from "node:path";
 import type { AnySchema, ErrorObject, ValidateFunction } from "ajv";
 import Ajv2020 from "ajv/dist/2020.js";
-import type { IngredientGroup, RecipeDocument } from "../shared/recipe";
+import addFormats from "ajv-formats";
+import recipeSchema from "../../schemas/recipe.schema.json" with { type: "json" };
+import type { IngredientGroup, RecipeAudit, RecipeDocument } from "../shared/recipe";
 
 export interface RecipeValidationReport {
   valid: boolean;
@@ -55,23 +56,19 @@ export function getRecipeValidator(): ValidateFunction<RecipeDocument> {
   const ajv = new Ajv2020({
     allErrors: true,
     strict: false,
-    formats: {
-      "date-time": true,
-      uri: true,
-    },
   });
+  addFormats(ajv);
   cachedValidator = ajv.compile<RecipeDocument>(schema);
   return cachedValidator;
 }
 
 function loadRecipeSchema(): AnySchema {
-  const schemaPath = process.env.RECIPE_SCHEMA_PATH ?? path.resolve(process.cwd(), "schemas/recipe.schema.json");
-  return JSON.parse(fs.readFileSync(schemaPath, "utf8")) as AnySchema;
+  return recipeSchema as AnySchema;
 }
 
 function auditRecipeDocument(recipe: RecipeDocument): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
-  const warnings: string[] = [...recipe.audit.warnings, ...recipe.audit.missing_information.map((item) => `missing: ${item}`)];
+  const warnings = collectAuditWarnings(recipe.audit);
   const sourceIds = new Set(recipe.source_refs.map((source) => source.id));
   const ingredientIdList = flattenIngredients(recipe.ingredients).map((ingredient) => ingredient.id);
   const ingredientIds = new Set(ingredientIdList);
@@ -130,6 +127,10 @@ function auditRecipeDocument(recipe: RecipeDocument): { errors: string[]; warnin
   }
 
   return { errors, warnings };
+}
+
+export function collectAuditWarnings(audit: RecipeAudit): string[] {
+  return [...audit.warnings, ...audit.missing_information.map((item) => `missing: ${item}`)];
 }
 
 function flattenIngredients(groups: IngredientGroup[]) {

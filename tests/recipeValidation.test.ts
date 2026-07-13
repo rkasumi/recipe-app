@@ -26,5 +26,18 @@ describe("recipe validation", () => {
     expect(report.valid).toBe(false);
     expect(report.auditErrors).toContain("flow edge edge-sauce-simmer references missing target node missing-node");
   });
-});
 
+  it("rejects invalid URI and date-time formats", () => {
+    const recipe = JSON.parse(fs.readFileSync(fixturePath, "utf8")) as RecipeDocument;
+    recipe.updated_at = "not-a-date";
+    recipe.source_refs[0].url = "not a URI";
+
+    const report = validateRecipeValue(recipe);
+
+    expect(report.schemaValid).toBe(false);
+    expect(report.schemaErrors).toEqual(expect.arrayContaining([
+      expect.stringContaining("format \"date-time\""),
+      expect.stringContaining("format \"uri\""),
+    ]));
+  });
+});

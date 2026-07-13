@@ -42,10 +42,14 @@ describe("recipe import", () => {
     expect(result.dryRun).toBe(true);
     expect(listRecipes(db, null)).toEqual([]);
   });
+
+  it("rejects an invalid port during config loading", () => {
+    expect(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "not-a-number" })).toThrow(/PORT must be an integer/);
+    expect(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "70000" })).toThrow(/PORT must be an integer/);
+  });
 });
 
 function makeConfig(): AppConfig {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "recipe-app-"));
   return loadConfig({ DATA_DIR: tempDir });
 }
-

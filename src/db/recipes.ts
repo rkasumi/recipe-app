@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { AppConfig, RecipeDatabase } from "./database";
-import type { RecipeDetail, RecipeDocument, RecipeSummary, SourceRef } from "../shared/recipe";
-import { validateRecipeFile, type RecipeValidationReport } from "../domain/recipeValidation";
+import type { RecipeDetail, RecipeDocument, RecipeSummary } from "../shared/recipe";
+import { collectAuditWarnings, validateRecipeFile, type RecipeValidationReport } from "../domain/recipeValidation";
 
 interface RecipeRow {
   id: string;
@@ -100,10 +100,7 @@ export function upsertRecipe(db: RecipeDatabase, recipe: RecipeDocument): void {
     .flatMap((group) => group.items.map((item) => `${group.title} ${item.name} ${item.quantity ?? ""}${item.unit ?? ""} ${item.note ?? ""}`))
     .join("\n");
   const stepText = recipe.steps.map((step) => `${step.order}. ${step.title ?? ""} ${step.instruction} ${step.heat ?? ""} ${step.duration ?? ""}`).join("\n");
-  const warnings = [
-    ...recipe.audit.warnings,
-    ...recipe.audit.missing_information.map((item) => `missing: ${item}`),
-  ];
+  const warnings = collectAuditWarnings(recipe.audit);
 
   db.prepare(`
     INSERT INTO recipes (
@@ -180,9 +177,5 @@ function appendImportLog(config: AppConfig, entry: { recipeId: string; filePath:
   fs.mkdirSync(logsDir, { recursive: true });
   const logPath = path.join(logsDir, "imports.jsonl");
   fs.appendFileSync(logPath, `${JSON.stringify(entry)}\n`, "utf8");
-}
-
-export function renderSourceRef(source: SourceRef): string {
-  return [source.title, source.url, source.note].filter(Boolean).join(" / ");
 }
 

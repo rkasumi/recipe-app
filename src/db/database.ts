@@ -15,9 +15,13 @@ export type RecipeDatabase = Database.Database;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const dataDir = path.resolve(env.DATA_DIR ?? "data");
+  const port = Number(env.PORT ?? "8080");
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`PORT must be an integer between 1 and 65535: ${env.PORT ?? "8080"}`);
+  }
   return {
     host: env.HOST ?? "127.0.0.1",
-    port: Number(env.PORT ?? "8080"),
+    port,
     dataDir,
     recipesDir: path.resolve(env.RECIPES_DIR ?? path.join(dataDir, "recipes")),
     dbPath: path.resolve(env.RECIPE_DB_PATH ?? path.join(dataDir, "recipes.sqlite")),
@@ -36,4 +40,3 @@ export function ensureDataDirs(config: AppConfig): void {
   fs.mkdirSync(config.recipesDir, { recursive: true });
   fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
 }
-

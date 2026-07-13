@@ -111,12 +111,16 @@ function parseArgs(args: string[]): ParsedArgs {
     }
 
     const option = token.slice(2);
+    if (option === "help" || option === "dry-run") {
+      options[option] = true;
+      continue;
+    }
     const next = rest[index + 1];
     if (next && !next.startsWith("--")) {
       options[option] = next;
       index += 1;
     } else {
-      options[option] = true;
+      throw new Error(`Option --${option} requires a value`);
     }
   }
 
@@ -180,4 +184,3 @@ main().catch((error: unknown) => {
   console.error(message);
   process.exitCode = 1;
 });
-

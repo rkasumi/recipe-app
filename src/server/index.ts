@@ -9,6 +9,7 @@ import type { HealthStatus, RecipeDetail, RecipeSummary } from "../shared/recipe
 export interface AppContext {
   config: AppConfig;
   db: RecipeDatabase;
+  clientDist?: string;
 }
 
 export function createServer(context: AppContext): express.Express {
@@ -34,7 +35,11 @@ export function createServer(context: AppContext): express.Express {
     res.json(detail);
   });
 
-  const clientDist = path.resolve(process.cwd(), "dist/client");
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "not_found" });
+  });
+
+  const clientDist = context.clientDist ?? path.resolve(process.cwd(), "dist/client");
   if (fs.existsSync(clientDist)) {
     app.use(express.static(clientDist, {
       index: false,
@@ -77,8 +82,8 @@ export function getRecipeDetailResponse(db: RecipeDatabase, id: string): RecipeD
 
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   void _next;
-  const message = error instanceof Error ? error.message : "unknown_error";
-  res.status(500).json({ error: "internal_error", message });
+  console.error("Unhandled request error", error);
+  res.status(500).json({ error: "internal_error" });
 };
 
 if (isMainModule()) {
