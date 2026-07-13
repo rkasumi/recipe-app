@@ -33,6 +33,10 @@ export function createServer(context: AppContext): express.Express {
   });
 
   app.get("/api/recipes/:id/notes", (req, res) => {
+    if (!context.config.enableWrites) {
+      res.status(403).json({ error: "notes_disabled" });
+      return;
+    }
     if (!getRecipeDetail(context.db, req.params.id)) {
       res.status(404).json({ error: "recipe_not_found" });
       return;

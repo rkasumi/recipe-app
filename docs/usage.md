@@ -51,7 +51,7 @@ pnpm dev
 
 API は既定で `127.0.0.1:8080`、Vite は `127.0.0.1:5173` です。
 
-自分メモは `JOURNAL_DB_PATH`（既定は `<DATA_DIR>/journal.sqlite`）へ保存します。書き込みAPIは
+自分メモは `JOURNAL_DB_PATH`（既定は `<DATA_DIR>/journal.sqlite`）へ保存します。メモの読み書きAPIは
 `ENABLE_WRITES=true` の場合だけ有効です。外部公開環境では認証済みreverse proxyを前提とし、
 `journal.sqlite` をバックアップ対象に含めてください。レシピDBの `sync` では自分メモを削除しません。
 

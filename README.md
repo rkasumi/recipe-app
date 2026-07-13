@@ -50,12 +50,12 @@ production import は private ops runbook 側で管理します。この reposit
 - `GET /health`, `GET /healthz`
 - `GET /api/recipes?q=...`
 - `GET /api/recipes/:id`
-- `GET /api/recipes/:id/notes`
+- `GET /api/recipes/:id/notes` (`ENABLE_WRITES=true` の場合のみ)
 - `PUT /api/recipes/:id/notes` (`ENABLE_WRITES=true` の場合のみ)
 
 画面はレシピ一覧、通常手順ビュー、材料ビュー、フローチャートビュー、audit warnings、source refs、AND検索、
 買い物リスト、調理モード、自分メモを持ちます。自分メモはレシピJSONとは分離した `journal.sqlite` に保存します。
-書き込みは既定で無効です。Cloudflare Accessなどの認証済みreverse proxy配下でのみ `ENABLE_WRITES=true` にしてください。
+メモの読み書きは既定で無効です。Cloudflare Accessなどの認証済みreverse proxy配下でのみ `ENABLE_WRITES=true` にしてください。
 `journal.sqlite` は再生成物ではないため、書き込みを有効にする運用ではバックアップ対象です。
 
 ## Checks

@@ -95,8 +95,8 @@ export function App() {
   }, [selectedId]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setPersonalNotes([]);
+    setPersonalNotes([]);
+    if (!selectedId || !notesWritable) {
       return;
     }
     const controller = new AbortController();
@@ -109,7 +109,7 @@ export function App() {
         }
       });
     return () => controller.abort();
-  }, [selectedId]);
+  }, [notesWritable, selectedId]);
 
   const savePersonalNote = async (targetType: RecipeNoteTarget, targetId: string, note: string): Promise<void> => {
     if (!selectedId) {

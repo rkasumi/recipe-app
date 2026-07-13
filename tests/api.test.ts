@@ -91,6 +91,8 @@ describe("api", () => {
         body: JSON.stringify({ targetType: "recipe", targetId: "oyakodon-basic", note: "blocked" }),
       });
       expect(disabledWrite.status).toBe(403);
+      const disabledRead = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`);
+      expect(disabledRead.status).toBe(403);
 
       const missingDetail = await fetch(`${baseUrl}/api/recipes/missing`);
       expect(missingDetail.status).toBe(404);
@@ -105,6 +107,27 @@ describe("api", () => {
       expect(spa.status).toBe(200);
       expect(await spa.text()).toContain("<title>recipe-app</title>");
     });
+  });
+
+  it("does not expose internal error messages", async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "recipe-app-"));
+    const config = loadConfig({ DATA_DIR: tempDir });
+    db = openDatabase(config);
+    journalDb = openJournalDatabase(config);
+    const app = createServer({ config, db, journalDb });
+    db.close();
+    db = null;
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await withServer(app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/health`);
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({ error: "internal_error" });
+      });
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 });
 
