@@ -209,6 +209,39 @@ input {
   font-weight: 700;
 }
 
+.tab-bar .cooking-toggle {
+  margin-left: auto;
+  color: #315c58;
+  font-weight: 700;
+}
+
+.cooking-status {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #b6c7a5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f7faef;
+  color: #315c58;
+  font-weight: 700;
+}
+
+.cooking-status button {
+  margin-left: auto;
+  border: 1px solid #8aa087;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: white;
+  color: #315c58;
+  cursor: pointer;
+}
+
 .steps-view {
   display: grid;
   gap: 12px;
@@ -234,6 +267,43 @@ input {
   background: #315c58;
   color: white;
   font-weight: 700;
+}
+
+.step-check {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid #315c58;
+  border-radius: 50%;
+  background: white;
+  color: #315c58;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cooking-steps li {
+  grid-template-columns: 52px minmax(0, 1fr);
+  min-height: 116px;
+  padding: 20px 0;
+}
+
+.cooking-steps h3 {
+  font-size: 1.35rem;
+}
+
+.cooking-steps p {
+  font-size: 1.2rem;
+  line-height: 1.8;
+}
+
+.cooking-steps li.completed {
+  opacity: 0.55;
+}
+
+.cooking-steps li.completed h3,
+.cooking-steps li.completed p {
+  text-decoration: line-through;
 }
 
 .steps-view p,
@@ -337,8 +407,20 @@ input {
     border-bottom: 1px solid #d7ddd2;
   }
 
+  .app-shell.cooking-mode .recipe-list-pane {
+    display: none;
+  }
+
   .detail-pane {
     padding: 18px;
+  }
+
+  .cooking-mode .detail-pane {
+    padding: 14px;
+  }
+
+  .cooking-status {
+    align-items: flex-start;
   }
 
   .flow-layout {
@@ -351,4 +433,3 @@ input {
     padding: 12px 0 0;
   }
 }
-

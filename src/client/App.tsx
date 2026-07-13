@@ -7,11 +7,20 @@ type Tab = "steps" | "ingredients" | "flow";
 export function App() {
   const [query, setQuery] = useState("");
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => recipeIdFromHash());
   const [detail, setDetail] = useState<RecipeDetail | null>(null);
   const [tab, setTab] = useState<Tab>("steps");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cookingMode, setCookingMode] = useState(false);
+  const [completedStepIds, setCompletedStepIds] = useState<Set<string>>(new Set());
+  const wakeLock = useWakeLock(cookingMode);
+
+  useEffect(() => {
+    const handleHashChange = () => setSelectedId(recipeIdFromHash() ?? recipes[0]?.id ?? null);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [recipes]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -20,7 +29,13 @@ export function App() {
       .then((payload: { recipes: RecipeSummary[] }) => {
         setRecipes(payload.recipes);
         setError(null);
-        setSelectedId((current) => current ?? payload.recipes[0]?.id ?? null);
+        setSelectedId((current) => {
+          const next = current ?? payload.recipes[0]?.id ?? null;
+          if (next && !recipeIdFromHash()) {
+            window.history.replaceState(null, "", recipeHash(next));
+          }
+          return next;
+        });
       })
       .catch((nextError: unknown) => {
         if ((nextError as Error).name !== "AbortError") {
@@ -41,6 +56,8 @@ export function App() {
       .then((payload: RecipeDetail) => {
         setDetail(payload);
         setSelectedNodeId(null);
+        const stepIds = new Set(payload.recipe.steps.map((step) => step.id));
+        setCompletedStepIds(new Set([...loadCompletedSteps(payload.id)].filter((stepId) => stepIds.has(stepId))));
         setError(null);
       })
       .catch((nextError: unknown) => {
@@ -52,7 +69,7 @@ export function App() {
   }, [selectedId]);
 
   return (
-    <main className="app-shell">
+    <main className={cookingMode ? "app-shell cooking-mode" : "app-shell"}>
       <aside className="recipe-list-pane">
         <div className="pane-header">
           <h1>recipe-app</h1>
@@ -74,8 +91,9 @@ export function App() {
               className={recipe.id === selectedId ? "recipe-row selected" : "recipe-row"}
               type="button"
               onClick={() => {
-                setSelectedId(recipe.id);
+                navigateToRecipe(recipe.id, setSelectedId);
                 setTab("steps");
+                setCookingMode(false);
               }}
             >
               <span className="recipe-row-title">{recipe.title}</span>
@@ -97,8 +115,48 @@ export function App() {
               <button className={tab === "steps" ? "active" : ""} type="button" onClick={() => setTab("steps")}>手順</button>
               <button className={tab === "ingredients" ? "active" : ""} type="button" onClick={() => setTab("ingredients")}>材料</button>
               <button className={tab === "flow" ? "active" : ""} type="button" onClick={() => setTab("flow")}>フロー</button>
+              <button
+                className={cookingMode ? "active cooking-toggle" : "cooking-toggle"}
+                type="button"
+                onClick={() => {
+                  setCookingMode((current) => !current);
+                  setTab("steps");
+                }}
+              >
+                {cookingMode ? "調理モード終了" : "調理モード"}
+              </button>
             </nav>
-            {tab === "steps" ? <StepsView steps={detail.recipe.steps} /> : null}
+            {cookingMode ? (
+              <div className="cooking-status" role="status">
+                <span>{completedStepIds.size} / {detail.recipe.steps.length} 完了</span>
+                <span>{wakeLock.supported ? (wakeLock.active ? "画面スリープ防止中" : "画面スリープ防止は未有効") : "スリープ防止はこの端末では利用できません"}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = new Set<string>();
+                    setCompletedStepIds(next);
+                    saveCompletedSteps(detail.id, next);
+                  }}
+                >リセット</button>
+              </div>
+            ) : null}
+            {tab === "steps" ? (
+              <StepsView
+                steps={detail.recipe.steps}
+                cookingMode={cookingMode}
+                completedStepIds={completedStepIds}
+                onToggleStep={(stepId) => {
+                  const next = new Set(completedStepIds);
+                  if (next.has(stepId)) {
+                    next.delete(stepId);
+                  } else {
+                    next.add(stepId);
+                  }
+                  setCompletedStepIds(next);
+                  saveCompletedSteps(detail.id, next);
+                }}
+              />
+            ) : null}
             {tab === "ingredients" ? <IngredientsView recipe={detail.recipe} /> : null}
             {tab === "flow" ? (
               <FlowView
@@ -140,12 +198,30 @@ function RecipeHeader({ recipe }: { recipe: RecipeDocument }) {
   );
 }
 
-function StepsView({ steps }: { steps: RecipeStep[] }) {
+function StepsView({
+  steps,
+  cookingMode,
+  completedStepIds,
+  onToggleStep,
+}: {
+  steps: RecipeStep[];
+  cookingMode: boolean;
+  completedStepIds: Set<string>;
+  onToggleStep: (stepId: string) => void;
+}) {
   return (
-    <ol className="steps-view">
+    <ol className={cookingMode ? "steps-view cooking-steps" : "steps-view"}>
       {steps.map((step) => (
-        <li key={step.id}>
-          <div className="step-number">{step.order}</div>
+        <li key={step.id} className={completedStepIds.has(step.id) ? "completed" : ""}>
+          {cookingMode ? (
+            <button
+              className="step-check"
+              type="button"
+              aria-label={`工程${step.order}を${completedStepIds.has(step.id) ? "未完了に戻す" : "完了にする"}`}
+              aria-pressed={completedStepIds.has(step.id)}
+              onClick={() => onToggleStep(step.id)}
+            >{completedStepIds.has(step.id) ? "✓" : step.order}</button>
+          ) : <div className="step-number">{step.order}</div>}
           <div>
             <h3>{step.title ?? `工程 ${step.order}`}</h3>
             <p>{step.instruction}</p>
@@ -159,6 +235,92 @@ function StepsView({ steps }: { steps: RecipeStep[] }) {
       ))}
     </ol>
   );
+}
+
+function recipeIdFromHash(): string | null {
+  const match = window.location.hash.match(/^#\/recipes\/([^/]+)$/u);
+  if (!match) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function recipeHash(recipeId: string): string {
+  return `#/recipes/${encodeURIComponent(recipeId)}`;
+}
+
+function navigateToRecipe(recipeId: string, setSelectedId: (recipeId: string) => void): void {
+  const hash = recipeHash(recipeId);
+  if (window.location.hash === hash) {
+    setSelectedId(recipeId);
+  } else {
+    window.location.hash = hash;
+  }
+}
+
+function completedStepsKey(recipeId: string): string {
+  return `recipe-app:cooking:${recipeId}`;
+}
+
+function loadCompletedSteps(recipeId: string): Set<string> {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(completedStepsKey(recipeId)) ?? "[]") as unknown;
+    return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCompletedSteps(recipeId: string, stepIds: Set<string>): void {
+  window.sessionStorage.setItem(completedStepsKey(recipeId), JSON.stringify([...stepIds]));
+}
+
+function useWakeLock(enabled: boolean): { supported: boolean; active: boolean } {
+  const supported = "wakeLock" in navigator;
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !supported) {
+      setActive(false);
+      return;
+    }
+    let cancelled = false;
+    let sentinel: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      try {
+        sentinel = await navigator.wakeLock.request("screen");
+        if (cancelled) {
+          await sentinel.release();
+          return;
+        }
+        setActive(true);
+        sentinel.addEventListener("release", () => setActive(false), { once: true });
+      } catch {
+        setActive(false);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && (!sentinel || sentinel.released)) {
+        void requestWakeLock();
+      }
+    };
+
+    void requestWakeLock();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      void sentinel?.release();
+      setActive(false);
+    };
+  }, [enabled, supported]);
+
+  return { supported, active };
 }
 
 function IngredientsView({ recipe }: { recipe: RecipeDocument }) {
@@ -283,4 +445,3 @@ function kindLabel(kind: RecipeFlowNode["kind"]): string {
       return "完成";
   }
 }
-
