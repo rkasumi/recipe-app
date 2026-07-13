@@ -61,7 +61,8 @@ function commandSync(parsed: ParsedArgs): void {
     console.log(`duplicate recipe id: ${id}`);
   }
   for (const id of result.deletedRecipeIds) {
-    console.log(`${result.dryRun ? "would delete" : "deleted"}: ${id}`);
+    const action = result.synced ? "deleted" : result.dryRun ? "would delete" : "not deleted";
+    console.log(`${action}: ${id}`);
   }
   if (result.synced) {
     console.log(`synced: ${result.results.length} recipes`);

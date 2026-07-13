@@ -335,7 +335,7 @@ function ShoppingListView({
             <strong>{item.name}</strong>
             <ul>
               {item.entries.map((entry) => (
-                <li key={`${entry.recipeId}:${entry.groupTitle}:${entry.quantityLabel}`}>
+                <li key={`${entry.recipeId}:${entry.ingredientId}`}>
                   <span>{entry.quantityLabel}</span>
                   <small>{entry.recipeTitle} / {entry.groupTitle}</small>
                 </li>

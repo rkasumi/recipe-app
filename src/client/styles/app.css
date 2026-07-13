@@ -240,6 +240,7 @@ input {
 
 .tab-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid #d7ddd2;
   margin-bottom: 18px;

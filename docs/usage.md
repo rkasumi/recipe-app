@@ -39,7 +39,8 @@ node dist/cli/index.js status --data-dir .tmp/recipe-app
 
 SQLite は生成物です。JSON 正本との完全同期には `sync --dry-run` で追加・削除予定を確認してから
 `sync` を実行します。全JSONが検証に通った場合だけtransaction内で全置換されます。
-DB schema を変更した場合も、永続マイグレーションではなく正本JSONから再生成する方針です。
+DB schema を変更した場合は生成物の `recipes.sqlite` を退避・削除し、`sync` で正本JSONから再生成する方針です。
+`journal.sqlite` は別の永続データなので削除しません。
 `imported_at` は初回作成日時ではなく、最終成功取込日時です。
 
 ## local app

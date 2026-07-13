@@ -1,6 +1,7 @@
 import type { RecipeDetail } from "../shared/recipe";
 
 export interface ShoppingListEntry {
+  ingredientId: string;
   recipeId: string;
   recipeTitle: string;
   groupTitle: string;
@@ -22,6 +23,7 @@ export function buildShoppingList(
         const key = ingredient.name.trim().toLocaleLowerCase("ja");
         const item = items.get(key) ?? { name: ingredient.name.trim(), entries: [] };
         item.entries.push({
+          ingredientId: ingredient.id,
           recipeId: detail.id,
           recipeTitle: detail.title,
           groupTitle: group.title,
