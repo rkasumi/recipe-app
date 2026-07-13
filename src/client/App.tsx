@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Background, Controls, MiniMap, ReactFlow, type Edge, type Node } from "@xyflow/react";
 import type { RecipeDetail, RecipeDocument, RecipeFlowNode, RecipeStep, RecipeSummary } from "../shared/recipe";
+import { buildShoppingList } from "./shoppingList";
 
 type Tab = "steps" | "ingredients" | "flow";
 
@@ -14,6 +15,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [cookingMode, setCookingMode] = useState(false);
   const [completedStepIds, setCompletedStepIds] = useState<Set<string>>(new Set());
+  const [shoppingRecipeIds, setShoppingRecipeIds] = useState<Set<string>>(new Set());
+  const [shoppingListOpen, setShoppingListOpen] = useState(false);
   const wakeLock = useWakeLock(cookingMode);
 
   useEffect(() => {
@@ -82,33 +85,76 @@ export function App() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="料理名、材料、工程"
           />
+          <small>空白で区切ると、すべてを含むレシピに絞り込みます。</small>
         </label>
+        <div className="list-actions">
+          <button
+            type="button"
+            disabled={recipes.length === 0}
+            onClick={() => {
+              const recipe = pickRandomRecipe(recipes);
+              if (recipe) {
+                navigateToRecipe(recipe.id, setSelectedId);
+                setShoppingListOpen(false);
+                setCookingMode(false);
+              }
+            }}
+          >おまかせ</button>
+          <button
+            type="button"
+            disabled={shoppingRecipeIds.size === 0}
+            onClick={() => {
+              setShoppingListOpen(true);
+              setCookingMode(false);
+            }}
+          >買い物リスト ({shoppingRecipeIds.size})</button>
+        </div>
         {error ? <div className="status-error">{error}</div> : null}
         <div className="recipe-list">
           {recipes.map((recipe) => (
-            <button
-              key={recipe.id}
-              className={recipe.id === selectedId ? "recipe-row selected" : "recipe-row"}
-              type="button"
-              onClick={() => {
-                navigateToRecipe(recipe.id, setSelectedId);
-                setTab("steps");
-                setCookingMode(false);
-              }}
-            >
-              <span className="recipe-row-title">{recipe.title}</span>
-              <span className="recipe-row-meta">{recipe.servingsLabel}</span>
-              <span className="tag-line">{recipe.tags.join(" / ")}</span>
-              {recipe.needsReview || recipe.warningCount > 0 ? (
-                <span className="warning-chip">{recipe.needsReview ? "要確認" : `${recipe.warningCount}件`}</span>
-              ) : null}
-            </button>
+            <div key={recipe.id} className="recipe-row-wrap">
+              <button
+                className={recipe.id === selectedId ? "recipe-row selected" : "recipe-row"}
+                type="button"
+                onClick={() => {
+                  navigateToRecipe(recipe.id, setSelectedId);
+                  setTab("steps");
+                  setCookingMode(false);
+                  setShoppingListOpen(false);
+                }}
+              >
+                <span className="recipe-row-title">{recipe.title}</span>
+                <span className="recipe-row-meta">{recipe.servingsLabel}</span>
+                <span className="tag-line">{recipe.tags.join(" / ")}</span>
+                {recipe.needsReview || recipe.warningCount > 0 ? (
+                  <span className="warning-chip">{recipe.needsReview ? "要確認" : `${recipe.warningCount}件`}</span>
+                ) : null}
+              </button>
+              <button
+                className={shoppingRecipeIds.has(recipe.id) ? "shopping-pick selected" : "shopping-pick"}
+                type="button"
+                aria-pressed={shoppingRecipeIds.has(recipe.id)}
+                onClick={() => setShoppingRecipeIds(toggleSetValue(shoppingRecipeIds, recipe.id))}
+              >{shoppingRecipeIds.has(recipe.id) ? "買い物から外す" : "買い物に追加"}</button>
+            </div>
           ))}
         </div>
       </aside>
 
       <section className="detail-pane">
-        {detail ? (
+        {shoppingListOpen ? (
+          <ShoppingListView
+            recipeIds={[...shoppingRecipeIds]}
+            onRemove={(recipeId) => {
+              const next = toggleSetValue(shoppingRecipeIds, recipeId);
+              setShoppingRecipeIds(next);
+              if (next.size === 0) {
+                setShoppingListOpen(false);
+              }
+            }}
+            onClose={() => setShoppingListOpen(false)}
+          />
+        ) : detail ? (
           <>
             <RecipeHeader recipe={detail.recipe} />
             <nav className="tab-bar" aria-label="recipe views">
@@ -172,6 +218,91 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function ShoppingListView({
+  recipeIds,
+  onRemove,
+  onClose,
+}: {
+  recipeIds: string[];
+  onRemove: (recipeId: string) => void;
+  onClose: () => void;
+}) {
+  const [details, setDetails] = useState<RecipeDetail[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all(recipeIds.map((recipeId) => (
+      fetch(`/api/recipes/${encodeURIComponent(recipeId)}`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() as Promise<RecipeDetail> : Promise.reject(new Error("recipe fetch failed")))
+    )))
+      .then((payload) => {
+        setDetails(payload);
+        setError(null);
+      })
+      .catch((nextError: unknown) => {
+        if ((nextError as Error).name !== "AbortError") {
+          setError("買い物リストを作成できませんでした。");
+        }
+      });
+    return () => controller.abort();
+  }, [recipeIds.join("\u0000")]);
+
+  const items = useMemo(() => buildShoppingList(details), [details]);
+  return (
+    <div className="shopping-list-view">
+      <header>
+        <div>
+          <h2>買い物リスト</h2>
+          <p>同じ名前の材料はまとめ、分量はレシピごとに表示します。</p>
+        </div>
+        <button type="button" onClick={onClose}>レシピに戻る</button>
+      </header>
+      <div className="shopping-recipes">
+        {details.map((detail) => (
+          <span key={detail.id}>
+            {detail.title}
+            <button type="button" aria-label={`${detail.title}を買い物リストから外す`} onClick={() => onRemove(detail.id)}>×</button>
+          </span>
+        ))}
+      </div>
+      {error ? <div className="status-error">{error}</div> : null}
+      <ul className="shopping-items">
+        {items.map((item) => (
+          <li key={item.name}>
+            <strong>{item.name}</strong>
+            <ul>
+              {item.entries.map((entry) => (
+                <li key={`${entry.recipeId}:${entry.groupTitle}:${entry.quantityLabel}`}>
+                  <span>{entry.quantityLabel}</span>
+                  <small>{entry.recipeTitle} / {entry.groupTitle}</small>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function toggleSetValue(values: Set<string>, value: string): Set<string> {
+  const next = new Set(values);
+  if (next.has(value)) {
+    next.delete(value);
+  } else {
+    next.add(value);
+  }
+  return next;
+}
+
+function pickRandomRecipe(recipes: RecipeSummary[]): RecipeSummary | null {
+  if (recipes.length === 0) {
+    return null;
+  }
+  return recipes[Math.floor(Math.random() * recipes.length)];
 }
 
 function RecipeHeader({ recipe }: { recipe: RecipeDocument }) {
