@@ -24,14 +24,24 @@ export interface ImportResult {
   validation: RecipeValidationReport;
 }
 
+export interface SyncResult {
+  results: ImportResult[];
+  dryRun: boolean;
+  synced: boolean;
+  duplicateRecipeIds: string[];
+  deletedRecipeIds: string[];
+}
+
 export function listRecipes(db: RecipeDatabase, query: string | null): RecipeSummary[] {
   const trimmed = query?.trim() ?? "";
-  const sql = trimmed
-    ? `SELECT * FROM recipes
-       WHERE title LIKE @q OR ingredient_text LIKE @q OR step_text LIKE @q OR tags_json LIKE @q
-       ORDER BY title COLLATE NOCASE`
-    : "SELECT * FROM recipes ORDER BY title COLLATE NOCASE";
-  const rows = db.prepare(sql).all(trimmed ? { q: `%${trimmed}%` } : {}) as RecipeRow[];
+  const terms = trimmed ? trimmed.split(/\s+/u) : [];
+  const searchableColumns = ["title", "ingredient_text", "step_text", "tags_json"];
+  const where = terms.map((_term, index) => (
+    `(${searchableColumns.map((column) => `${column} LIKE @q${index} ESCAPE '\\'`).join(" OR ")})`
+  )).join(" AND ");
+  const sql = `SELECT * FROM recipes${where ? ` WHERE ${where}` : ""} ORDER BY title COLLATE NOCASE`;
+  const parameters = Object.fromEntries(terms.map((term, index) => [`q${index}`, `%${escapeLike(term)}%`]));
+  const rows = db.prepare(sql).all(parameters) as RecipeRow[];
   return rows.map(rowToSummary);
 }
 
@@ -86,16 +96,55 @@ export function importAllRecipeFiles(
   recipesDir: string,
   options: { dryRun: boolean },
 ): ImportResult[] {
-  const files = fs
-    .readdirSync(recipesDir)
-    .filter((entry) => entry.endsWith(".json"))
-    .sort()
-    .map((entry) => path.join(recipesDir, entry));
+  const files = listRecipeFiles(recipesDir);
   return files.map((filePath) => importRecipeFile(db, config, filePath, options));
 }
 
-export function upsertRecipe(db: RecipeDatabase, recipe: RecipeDocument): void {
+export function syncRecipeFiles(
+  db: RecipeDatabase,
+  config: AppConfig,
+  recipesDir: string,
+  options: { dryRun: boolean },
+): SyncResult {
+  const results = listRecipeFiles(recipesDir).map((filePath): ImportResult => {
+    const validation = validateRecipeFile(filePath);
+    return { filePath, imported: false, dryRun: options.dryRun, validation };
+  });
+  if (results.length === 0) {
+    throw new Error(`sync requires at least one recipe JSON: ${recipesDir}`);
+  }
+  const recipeIds = results.flatMap((result) => result.validation.recipe?.id ?? []);
+  const duplicateRecipeIds = findDuplicates(recipeIds);
+  const targetIds = new Set(recipeIds);
+  const currentIds = (db.prepare("SELECT id FROM recipes").all() as Array<{ id: string }>).map((row) => row.id);
+  const deletedRecipeIds = currentIds.filter((id) => !targetIds.has(id));
+  const valid = results.every((result) => result.validation.valid) && duplicateRecipeIds.length === 0;
+
+  if (!valid || options.dryRun) {
+    return { results, dryRun: options.dryRun, synced: false, duplicateRecipeIds, deletedRecipeIds };
+  }
+
   const importedAt = new Date().toISOString();
+  db.transaction(() => {
+    db.exec("DELETE FROM recipes");
+    for (const result of results) {
+      upsertRecipe(db, result.validation.recipe!, importedAt);
+    }
+  })();
+  for (const result of results) {
+    result.imported = true;
+    appendImportLog(config, {
+      recipeId: result.validation.recipe!.id,
+      filePath: result.filePath,
+      importedAt,
+      warnings: result.validation.auditWarnings,
+    });
+  }
+
+  return { results, dryRun: false, synced: true, duplicateRecipeIds: [], deletedRecipeIds };
+}
+
+export function upsertRecipe(db: RecipeDatabase, recipe: RecipeDocument, importedAt = new Date().toISOString()): void {
   const ingredientText = recipe.ingredients
     .flatMap((group) => group.items.map((item) => `${group.title} ${item.name} ${item.quantity ?? ""}${item.unit ?? ""} ${item.note ?? ""}`))
     .join("\n");
@@ -158,6 +207,30 @@ export function upsertRecipe(db: RecipeDatabase, recipe: RecipeDocument): void {
   });
 }
 
+function listRecipeFiles(recipesDir: string): string[] {
+  return fs
+    .readdirSync(recipesDir)
+    .filter((entry) => entry.endsWith(".json"))
+    .sort()
+    .map((entry) => path.join(recipesDir, entry));
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/gu, (character) => `\\${character}`);
+}
+
+function findDuplicates(values: string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    }
+    seen.add(value);
+  }
+  return [...duplicates].sort();
+}
+
 function rowToSummary(row: RecipeRow): RecipeSummary {
   const warnings = JSON.parse(row.warnings_json) as string[];
   return {
@@ -178,4 +251,3 @@ function appendImportLog(config: AppConfig, entry: { recipeId: string; filePath:
   const logPath = path.join(logsDir, "imports.jsonl");
   fs.appendFileSync(logPath, `${JSON.stringify(entry)}\n`, "utf8");
 }
-

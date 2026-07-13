@@ -36,9 +36,14 @@ pnpm run recipe:dry-run
 pnpm run recipe:import:sample
 pnpm run recipe:import-all:dry-run
 node dist/cli/index.js status --data-dir .tmp/recipe-app
+node dist/cli/index.js sync --recipes-dir fixtures/recipes --data-dir .tmp/recipe-app --dry-run
 ```
 
-production import は private ops runbook 側で管理します。この repository では local data dir に対する validate / dry-run / import を扱います。
+`sync` は全 JSON の schema/audit と recipe ID の重複を先に検査し、成功した場合だけ SQLite の
+レシピ行を transaction 内で全置換します。`--dry-run` で削除予定を確認してから実行してください。
+SQLite の `imported_at` / API の `importedAt` は初回作成日時ではなく、最終成功取込日時です。
+
+production import は private ops runbook 側で管理します。この repository では local data dir に対する validate / dry-run / import / sync を扱います。
 
 ## App
 

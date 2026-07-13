@@ -1,6 +1,6 @@
 import path from "node:path";
 import { loadConfig, openDatabase, type AppConfig } from "../db/database";
-import { countRecipes, importAllRecipeFiles, importRecipeFile, type ImportResult } from "../db/recipes";
+import { countRecipes, importAllRecipeFiles, importRecipeFile, syncRecipeFiles, type ImportResult } from "../db/recipes";
 import { validateRecipeFile } from "../domain/recipeValidation";
 
 interface ParsedArgs {
@@ -29,11 +29,48 @@ async function main(): Promise<void> {
     case "import-all":
       commandImportAll(parsed);
       return;
+    case "sync":
+      commandSync(parsed);
+      return;
     case "status":
       commandStatus(parsed);
       return;
     default:
       throw new Error(`Unknown command: ${parsed.command}`);
+  }
+}
+
+function commandSync(parsed: ParsedArgs): void {
+  const config = configFromArgs(parsed);
+  const recipesDir = getStringOption(parsed, "recipes-dir") ?? config.recipesDir;
+  const db = openDatabase(config);
+  const result = syncRecipeFiles(db, config, recipesDir, { dryRun: getBooleanOption(parsed, "dry-run") });
+  for (const item of result.results) {
+    printValidation(
+      item.filePath,
+      item.validation.valid,
+      item.validation.schemaErrors,
+      item.validation.auditErrors,
+      item.validation.auditWarnings,
+    );
+    if (item.validation.valid && (result.synced || result.dryRun)) {
+      console.log(`${result.synced ? "imported" : "dry-run"}: ${item.validation.recipe?.id ?? item.filePath}`);
+    }
+  }
+  for (const id of result.duplicateRecipeIds) {
+    console.log(`duplicate recipe id: ${id}`);
+  }
+  for (const id of result.deletedRecipeIds) {
+    console.log(`${result.dryRun ? "would delete" : "deleted"}: ${id}`);
+  }
+  if (result.synced) {
+    console.log(`synced: ${result.results.length} recipes`);
+  } else if (result.dryRun && result.results.every((item) => item.validation.valid) && result.duplicateRecipeIds.length === 0) {
+    console.log(`would sync: ${result.results.length} recipes`);
+  }
+  db.close();
+  if (result.results.some((item) => !item.validation.valid) || result.duplicateRecipeIds.length > 0) {
+    process.exitCode = 1;
   }
 }
 
@@ -175,6 +212,7 @@ Commands:
   dry-run <recipe.json> [--data-dir DIR]
   import <recipe.json> [--data-dir DIR] [--dry-run]
   import-all [--recipes-dir DIR] [--data-dir DIR] [--dry-run]
+  sync [--recipes-dir DIR] [--data-dir DIR] [--dry-run]
   status [--data-dir DIR]
 `);
 }

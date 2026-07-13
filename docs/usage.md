@@ -32,10 +32,15 @@ node dist/cli/index.js dry-run path/to/recipe.json --data-dir .tmp/recipe-app
 pnpm -s build:server
 node dist/cli/index.js import path/to/recipe.json --data-dir .tmp/recipe-app
 node dist/cli/index.js import-all --recipes-dir fixtures/recipes --data-dir .tmp/recipe-app
+node dist/cli/index.js sync --recipes-dir fixtures/recipes --data-dir .tmp/recipe-app --dry-run
+node dist/cli/index.js sync --recipes-dir fixtures/recipes --data-dir .tmp/recipe-app
 node dist/cli/index.js status --data-dir .tmp/recipe-app
 ```
 
-SQLite は生成物です。JSON 正本を変更したら、同じ data dir に対して import を再実行します。
+SQLite は生成物です。JSON 正本との完全同期には `sync --dry-run` で追加・削除予定を確認してから
+`sync` を実行します。全JSONが検証に通った場合だけtransaction内で全置換されます。
+DB schema を変更した場合も、永続マイグレーションではなく正本JSONから再生成する方針です。
+`imported_at` は初回作成日時ではなく、最終成功取込日時です。
 
 ## local app
 
