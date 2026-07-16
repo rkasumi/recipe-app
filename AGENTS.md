@@ -24,3 +24,5 @@ pnpm run check:secrets
 ```
 
 CLIや同期処理を変えた場合は、実データではなくfixtureと `.tmp/recipe-app/` を使って `dry-run` / `sync --dry-run` も確認する。
+
+開発serverは`pnpm dev`と`pnpm dev:api`、production相当のlocal起動はbuild後に`pnpm start`を使う。
