@@ -24,7 +24,7 @@ audit report の最低限の概念:
 - flow audit
 - `needs_review`
 - `review_reasons`
-- subagent 使用有無と、未使用時の代替監査理由
+- 監査実行方法（既存 `subagent` fieldには通常 `used: false` と主モデルによる監査を記録）
 
 後段の CLI batch と app は schema 済み recipe JSON を読む。raw source text を batch/app 側で再解釈してはいけない。
 

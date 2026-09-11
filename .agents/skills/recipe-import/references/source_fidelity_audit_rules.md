@@ -9,5 +9,5 @@ schema validation は監査の一部でしかない。次の観点を audit repo
 - 任意材料、代替可能材料、好みで調整する分量が明示されているか。
 - 手順順序が source と矛盾していないか。
 - flow が手順と材料を正しく参照しているか。
-- subagent を使えない場合、親 Codex が同じ観点で代替監査した理由を `subagent.reason` に書く。
+- 主モデルが同じ観点で監査する。既存schemaの `subagent.reason` には監査実行方法を記録する。独立agentは完了条件ではない。
 
