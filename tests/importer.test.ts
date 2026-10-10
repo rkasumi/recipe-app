@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadConfig, openDatabase, type AppConfig, type RecipeDatabase } from "../src/db/database";
+import { loadConfig, openDatabase, openJournalDatabase, type AppConfig, type RecipeDatabase } from "../src/db/database";
 import { getRecipeDetail, importRecipeFile, listRecipes, syncRecipeFiles } from "../src/db/recipes";
+import { listRecipeNotes, saveRecipeNote } from "../src/db/notes";
 
 const fixturePath = path.resolve("fixtures/recipes/oyakodon.json");
 let tempDir: string | null = null;
@@ -81,9 +81,89 @@ describe("recipe import", () => {
     expect(rejected.synced).toBe(false);
     expect(getRecipeDetail(db, "oyakodon-basic")).not.toBeNull();
   });
+
+  it("rejects duplicate IDs without changing existing recipes or import logs", () => {
+    const config = makeConfig();
+    db = openDatabase(config);
+    importRecipeFile(db, config, fixturePath, { dryRun: false });
+    const logPath = path.join(config.dataDir, "import-logs", "imports.jsonl");
+    const originalLog = fs.readFileSync(logPath, "utf8");
+    const recipesDir = path.join(config.dataDir, "duplicates");
+    fs.mkdirSync(recipesDir);
+    fs.copyFileSync(fixturePath, path.join(recipesDir, "a.json"));
+    fs.copyFileSync(fixturePath, path.join(recipesDir, "b.json"));
+
+    for (const dryRun of [true, false]) {
+      const result = syncRecipeFiles(db, config, recipesDir, { dryRun });
+      expect(result.synced).toBe(false);
+      expect(result.duplicateRecipeIds).toEqual(["oyakodon-basic"]);
+      expect(listRecipes(db, null).map((recipe) => recipe.id)).toEqual(["oyakodon-basic"]);
+      expect(fs.readFileSync(logPath, "utf8")).toBe(originalLog);
+    }
+  });
+
+  it("rolls back deletion and earlier inserts when a later sync insert fails", () => {
+    const config = makeConfig();
+    db = openDatabase(config);
+    importRecipeFile(db, config, fixturePath, { dryRun: false });
+    const logPath = path.join(config.dataDir, "import-logs", "imports.jsonl");
+    const originalLog = fs.readFileSync(logPath, "utf8");
+    const recipesDir = path.join(config.dataDir, "rollback");
+    fs.mkdirSync(recipesDir);
+    for (const id of ["a-valid", "z-rejected"]) {
+      const recipe = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+      recipe.id = id;
+      fs.writeFileSync(path.join(recipesDir, `${id}.json`), JSON.stringify(recipe));
+    }
+    const dryRun = syncRecipeFiles(db, config, recipesDir, { dryRun: true });
+    expect(dryRun.results.every((result) => result.validation.valid)).toBe(true);
+    expect(dryRun.deletedRecipeIds).toEqual(["oyakodon-basic"]);
+    expect(getRecipeDetail(db, "oyakodon-basic")).not.toBeNull();
+    db.exec(`CREATE TRIGGER reject_fixture BEFORE INSERT ON recipes
+      WHEN NEW.id = 'z-rejected' BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`);
+
+    expect(() => syncRecipeFiles(db!, config, recipesDir, { dryRun: false })).toThrow("fixture failure");
+    expect(db.inTransaction).toBe(false);
+    expect(listRecipes(db, null).map((recipe) => recipe.id)).toEqual(["oyakodon-basic"]);
+    expect(fs.readFileSync(logPath, "utf8")).toBe(originalLog);
+  });
+
+  it("preserves journal notes across recipe replacement and database reopen", () => {
+    const config = makeConfig();
+    db = openDatabase(config);
+    importRecipeFile(db, config, fixturePath, { dryRun: false });
+    const input = { recipeId: "oyakodon-basic", targetType: "recipe" as const, targetId: "oyakodon-basic", note: "fixture note" };
+    const journal = openJournalDatabase(config);
+    try {
+      saveRecipeNote(journal, input);
+    } finally {
+      journal.close();
+    }
+    const recipesDir = path.join(config.dataDir, "replacement");
+    fs.mkdirSync(recipesDir);
+    const replacement = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+    replacement.id = "replacement";
+    fs.writeFileSync(path.join(recipesDir, "recipe.json"), JSON.stringify(replacement));
+    expect(syncRecipeFiles(db, config, recipesDir, { dryRun: true }).synced).toBe(false);
+    expect(syncRecipeFiles(db, config, recipesDir, { dryRun: false }).synced).toBe(true);
+    db.close();
+    db = openDatabase(config);
+    expect(getRecipeDetail(db, "oyakodon-basic")).toBeNull();
+    expect(getRecipeDetail(db, "replacement")).not.toBeNull();
+    const reopenedJournal = openJournalDatabase(config);
+    try {
+      expect(listRecipeNotes(reopenedJournal, input.recipeId)).toEqual([expect.objectContaining(input)]);
+      expect(reopenedJournal.pragma("integrity_check", { simple: true })).toBe("ok");
+      expect(db.pragma("integrity_check", { simple: true })).toBe("ok");
+    } finally {
+      reopenedJournal.close();
+    }
+  });
 });
 
 function makeConfig(): AppConfig {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "recipe-app-"));
+  const root = path.resolve(".tmp/recipe-app");
+  fs.mkdirSync(root, { recursive: true });
+  tempDir = fs.mkdtempSync(path.join(root, "import-test-"));
   return loadConfig({ DATA_DIR: tempDir });
 }

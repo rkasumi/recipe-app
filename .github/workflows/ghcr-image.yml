@@ -33,13 +33,33 @@ jobs:
         id: image
         run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v7
+        id: candidate
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          push: false
+          tags: |
+            ghcr.io/rkasumi/recipe-app:latest
+            ghcr.io/rkasumi/recipe-app:sha-${{ steps.image.outputs.short_sha }}
+      - name: Verify native database and API in the runtime image
+        env:
+          IMAGE_ID: ${{ steps.candidate.outputs.imageid }}
+        run: |
+          docker run --rm --network none \
+            -v "$PWD/fixtures:/fixtures:ro" \
+            -v "$PWD/scripts:/checks:ro" \
+            --entrypoint node "$IMAGE_ID" /checks/image-smoke.mjs /fixtures/recipes
+      - uses: docker/build-push-action@v7
+        if: github.event_name != 'pull_request'
         id: build
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
             ghcr.io/rkasumi/recipe-app:latest
             ghcr.io/rkasumi/recipe-app:sha-${{ steps.image.outputs.short_sha }}
       - name: Write image summary
+        if: github.event_name != 'pull_request'
         run: echo "image digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
