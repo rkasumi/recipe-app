@@ -11,7 +11,23 @@ updates:
     cooldown:
       default-days: 3
       semver-major-days: 14
+    ignore:
+      # Runtime and build images use Node 24; review types with a runtime upgrade.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Revisit when typescript-eslint officially supports TypeScript 7.
+      - dependency-name: typescript
+        versions: [">=7"]
     groups:
+      react-ui:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - minor
+          - patch
       production-minor-and-patch:
         dependency-type: production
         update-types:
