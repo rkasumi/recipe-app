@@ -63,3 +63,32 @@ jobs:
       - name: Write image summary
         if: github.event_name != 'pull_request'
         run: echo "image digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify the published runtime image
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm --pull always --network none --read-only \
+            --entrypoint node "ghcr.io/rkasumi/recipe-app@$IMAGE_DIGEST" \
+            -e 'const assert = require("node:assert/strict"); assert.equal(process.version, "v24.22.1"); const Database = require("better-sqlite3"); const db = new Database(":memory:"); assert.equal(db.prepare("SELECT 1 AS ok").get().ok, 1); db.close(); console.log(JSON.stringify({node: process.version, brotli: process.versions.brotli, openssl: process.versions.openssl}));' > runtime-check.json
+          cat runtime-check.json
+      - name: Write release image metadata
+        if: github.event_name != 'pull_request'
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          IMAGE_REF: ghcr.io/rkasumi/recipe-app:sha-${{ steps.image.outputs.short_sha }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf '{"sourceCommit":"%s","image":"%s","digest":"%s"}\n' \
+            "$SOURCE_COMMIT" "$IMAGE_REF" "$IMAGE_DIGEST" > release-image.json
+      - name: Upload release image metadata
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-image
+          path: |
+            release-image.json
+            runtime-check.json
+          if-no-files-found: error
