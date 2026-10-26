@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import { buildShoppingList } from "../src/client/shoppingList";
 import type { RecipeDetail, RecipeDocument } from "../src/shared/recipe";
 
@@ -20,10 +21,10 @@ describe("shopping list", () => {
     ]);
     const chicken = items.find((item) => item.name === "鶏もも肉");
 
-    expect(chicken?.entries).toEqual([
-      expect.objectContaining({ recipeTitle: "親子丼", quantityLabel: "200 g" }),
-      expect.objectContaining({ recipeTitle: "親子丼 大盛り", quantityLabel: "400 g" }),
-    ]);
+    assert.ok(chicken);
+    assert.equal(chicken.entries.length, 2);
+    assert.partialDeepStrictEqual(chicken.entries[0], { recipeTitle: "親子丼", quantityLabel: "200 g" });
+    assert.partialDeepStrictEqual(chicken.entries[1], { recipeTitle: "親子丼 大盛り", quantityLabel: "400 g" });
   });
 });
 

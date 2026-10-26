@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
 import { loadConfig, openDatabase, openJournalDatabase, type AppConfig, type RecipeDatabase } from "../src/db/database";
 import { getRecipeDetail, importRecipeFile, listRecipes, syncRecipeFiles } from "../src/db/recipes";
 import { listRecipeNotes, saveRecipeNote } from "../src/db/notes";
@@ -27,14 +28,14 @@ describe("recipe import", () => {
     const summaries = listRecipes(db, "鶏");
     const detail = getRecipeDetail(db, "oyakodon-basic");
 
-    expect(result.imported).toBe(true);
-    expect(summaries).toHaveLength(1);
-    expect(detail?.recipe.title).toBe("親子丼");
-    expect(listRecipes(db, "鶏 玉ねぎ")).toHaveLength(1);
-    expect(listRecipes(db, "鶏 存在しない材料")).toEqual([]);
-    expect(listRecipes(db, "%")).toEqual([]);
-    expect(listRecipes(db, "_")).toEqual([]);
-    expect(fs.existsSync(path.join(config.dataDir, "import-logs", "imports.jsonl"))).toBe(true);
+    assert.equal(result.imported, true);
+    assert.equal(summaries.length, 1);
+    assert.equal(detail?.recipe.title, "親子丼");
+    assert.equal(listRecipes(db, "鶏 玉ねぎ").length, 1);
+    assert.deepEqual(listRecipes(db, "鶏 存在しない材料"), []);
+    assert.deepEqual(listRecipes(db, "%"), []);
+    assert.deepEqual(listRecipes(db, "_"), []);
+    assert.equal(fs.existsSync(path.join(config.dataDir, "import-logs", "imports.jsonl")), true);
   });
 
   it("dry-run validates without writing rows", () => {
@@ -43,13 +44,13 @@ describe("recipe import", () => {
 
     const result = importRecipeFile(db, config, fixturePath, { dryRun: true });
 
-    expect(result.dryRun).toBe(true);
-    expect(listRecipes(db, null)).toEqual([]);
+    assert.equal(result.dryRun, true);
+    assert.deepEqual(listRecipes(db, null), []);
   });
 
   it("rejects an invalid port during config loading", () => {
-    expect(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "not-a-number" })).toThrow(/PORT must be an integer/);
-    expect(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "70000" })).toThrow(/PORT must be an integer/);
+    assert.throws(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "not-a-number" }), /PORT must be an integer/);
+    assert.throws(() => loadConfig({ DATA_DIR: ".tmp/test", PORT: "70000" }), /PORT must be an integer/);
   });
 
   it("sync replaces the generated database only after every recipe validates", () => {
@@ -67,19 +68,19 @@ describe("recipe import", () => {
     importRecipeFile(db, config, stalePath, { dryRun: false });
 
     const dryRun = syncRecipeFiles(db, config, recipesDir, { dryRun: true });
-    expect(dryRun.synced).toBe(false);
-    expect(dryRun.deletedRecipeIds).toEqual(["stale-recipe"]);
-    expect(getRecipeDetail(db, "stale-recipe")).not.toBeNull();
+    assert.equal(dryRun.synced, false);
+    assert.deepEqual(dryRun.deletedRecipeIds, ["stale-recipe"]);
+    assert.notEqual(getRecipeDetail(db, "stale-recipe"), null);
 
     const synced = syncRecipeFiles(db, config, recipesDir, { dryRun: false });
-    expect(synced.synced).toBe(true);
-    expect(getRecipeDetail(db, "stale-recipe")).toBeNull();
-    expect(getRecipeDetail(db, "oyakodon-basic")?.importedAt).toBeTruthy();
+    assert.equal(synced.synced, true);
+    assert.equal(getRecipeDetail(db, "stale-recipe"), null);
+    assert.ok(getRecipeDetail(db, "oyakodon-basic")?.importedAt);
 
     fs.writeFileSync(path.join(recipesDir, "invalid.json"), "{}");
     const rejected = syncRecipeFiles(db, config, recipesDir, { dryRun: false });
-    expect(rejected.synced).toBe(false);
-    expect(getRecipeDetail(db, "oyakodon-basic")).not.toBeNull();
+    assert.equal(rejected.synced, false);
+    assert.notEqual(getRecipeDetail(db, "oyakodon-basic"), null);
   });
 
   it("rejects duplicate IDs without changing existing recipes or import logs", () => {
@@ -95,10 +96,10 @@ describe("recipe import", () => {
 
     for (const dryRun of [true, false]) {
       const result = syncRecipeFiles(db, config, recipesDir, { dryRun });
-      expect(result.synced).toBe(false);
-      expect(result.duplicateRecipeIds).toEqual(["oyakodon-basic"]);
-      expect(listRecipes(db, null).map((recipe) => recipe.id)).toEqual(["oyakodon-basic"]);
-      expect(fs.readFileSync(logPath, "utf8")).toBe(originalLog);
+      assert.equal(result.synced, false);
+      assert.deepEqual(result.duplicateRecipeIds, ["oyakodon-basic"]);
+      assert.deepEqual(listRecipes(db, null).map((recipe) => recipe.id), ["oyakodon-basic"]);
+      assert.equal(fs.readFileSync(logPath, "utf8"), originalLog);
     }
   });
 
@@ -116,16 +117,16 @@ describe("recipe import", () => {
       fs.writeFileSync(path.join(recipesDir, `${id}.json`), JSON.stringify(recipe));
     }
     const dryRun = syncRecipeFiles(db, config, recipesDir, { dryRun: true });
-    expect(dryRun.results.every((result) => result.validation.valid)).toBe(true);
-    expect(dryRun.deletedRecipeIds).toEqual(["oyakodon-basic"]);
-    expect(getRecipeDetail(db, "oyakodon-basic")).not.toBeNull();
+    assert.equal(dryRun.results.every((result) => result.validation.valid), true);
+    assert.deepEqual(dryRun.deletedRecipeIds, ["oyakodon-basic"]);
+    assert.notEqual(getRecipeDetail(db, "oyakodon-basic"), null);
     db.exec(`CREATE TRIGGER reject_fixture BEFORE INSERT ON recipes
       WHEN NEW.id = 'z-rejected' BEGIN SELECT RAISE(ABORT, 'fixture failure'); END`);
 
-    expect(() => syncRecipeFiles(db!, config, recipesDir, { dryRun: false })).toThrow("fixture failure");
-    expect(db.inTransaction).toBe(false);
-    expect(listRecipes(db, null).map((recipe) => recipe.id)).toEqual(["oyakodon-basic"]);
-    expect(fs.readFileSync(logPath, "utf8")).toBe(originalLog);
+    assert.throws(() => syncRecipeFiles(db!, config, recipesDir, { dryRun: false }), { message: "fixture failure" });
+    assert.equal(db.inTransaction, false);
+    assert.deepEqual(listRecipes(db, null).map((recipe) => recipe.id), ["oyakodon-basic"]);
+    assert.equal(fs.readFileSync(logPath, "utf8"), originalLog);
   });
 
   it("preserves journal notes across recipe replacement and database reopen", () => {
@@ -144,17 +145,19 @@ describe("recipe import", () => {
     const replacement = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
     replacement.id = "replacement";
     fs.writeFileSync(path.join(recipesDir, "recipe.json"), JSON.stringify(replacement));
-    expect(syncRecipeFiles(db, config, recipesDir, { dryRun: true }).synced).toBe(false);
-    expect(syncRecipeFiles(db, config, recipesDir, { dryRun: false }).synced).toBe(true);
+    assert.equal(syncRecipeFiles(db, config, recipesDir, { dryRun: true }).synced, false);
+    assert.equal(syncRecipeFiles(db, config, recipesDir, { dryRun: false }).synced, true);
     db.close();
     db = openDatabase(config);
-    expect(getRecipeDetail(db, "oyakodon-basic")).toBeNull();
-    expect(getRecipeDetail(db, "replacement")).not.toBeNull();
+    assert.equal(getRecipeDetail(db, "oyakodon-basic"), null);
+    assert.notEqual(getRecipeDetail(db, "replacement"), null);
     const reopenedJournal = openJournalDatabase(config);
     try {
-      expect(listRecipeNotes(reopenedJournal, input.recipeId)).toEqual([expect.objectContaining(input)]);
-      expect(reopenedJournal.pragma("integrity_check", { simple: true })).toBe("ok");
-      expect(db.pragma("integrity_check", { simple: true })).toBe("ok");
+      const notes = listRecipeNotes(reopenedJournal, input.recipeId);
+      assert.equal(notes.length, 1);
+      assert.partialDeepStrictEqual(notes[0], input);
+      assert.equal(reopenedJournal.pragma("integrity_check", { simple: true }), "ok");
+      assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
     } finally {
       reopenedJournal.close();
     }

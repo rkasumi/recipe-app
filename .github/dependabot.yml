@@ -15,10 +15,17 @@ updates:
       # Runtime and build images use Node 24; review types with a runtime upgrade.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # Revisit when typescript-eslint officially supports TypeScript 7.
-      - dependency-name: typescript
-        versions: [">=7"]
     groups:
+      runtime-security:
+        applies-to: security-updates
+        dependency-type: production
+        patterns:
+          - "*"
+      development-security:
+        applies-to: security-updates
+        dependency-type: development
+        patterns:
+          - "*"
       react-ui:
         patterns:
           - react

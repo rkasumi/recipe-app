@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
 import { loadConfig, openDatabase, openJournalDatabase, type RecipeDatabase } from "../src/db/database";
 import { importRecipeFile } from "../src/db/recipes";
 import { createServer, getHealthStatus, getRecipeDetailResponse, getRecipeListResponse } from "../src/server/index";
@@ -31,13 +32,14 @@ describe("api", () => {
     importRecipeFile(db, config, fixturePath, { dryRun: false });
 
     const health = getHealthStatus(db);
-    expect(health.recipeCount).toBe(1);
+    assert.equal(health.recipeCount, 1);
 
     const list = getRecipeListResponse(db, "玉ねぎ");
-    expect(list.recipes[0].id).toBe("oyakodon-basic");
+    assert.equal(list.recipes[0].id, "oyakodon-basic");
 
     const detail = getRecipeDetailResponse(db, "oyakodon-basic");
-    expect(detail?.recipe.flow.nodes.length).toBeGreaterThan(0);
+    assert.ok(detail);
+    assert.ok(detail.recipe.flow.nodes.length > 0);
   });
 
   it("serves API routes, JSON 404s, and the SPA fallback", async () => {
@@ -53,36 +55,38 @@ describe("api", () => {
 
     await withServer(app, async (baseUrl) => {
       const health = await fetch(`${baseUrl}/health`);
-      expect(health.status).toBe(200);
-      expect(await health.json()).toMatchObject({ ok: true, recipeCount: 1 });
+      assert.equal(health.status, 200);
+      assert.partialDeepStrictEqual(await health.json(), { ok: true, recipeCount: 1 });
 
       const list = await fetch(`${baseUrl}/api/recipes?q=${encodeURIComponent("玉ねぎ")}`);
-      expect(list.status).toBe(200);
-      expect((await list.json() as { recipes: Array<{ id: string }> }).recipes[0].id).toBe("oyakodon-basic");
+      assert.equal(list.status, 200);
+      assert.equal((await list.json() as { recipes: Array<{ id: string }> }).recipes[0].id, "oyakodon-basic");
 
       const detail = await fetch(`${baseUrl}/api/recipes/oyakodon-basic`);
-      expect(detail.status).toBe(200);
+      assert.equal(detail.status, 200);
 
       const capabilities = await fetch(`${baseUrl}/api/capabilities`);
-      expect(await capabilities.json()).toEqual({ notesWritable: true });
+      assert.deepEqual(await capabilities.json(), { notesWritable: true });
 
       const savedNote = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetType: "ingredient", targetId: "chicken-thigh", note: "うちでは少し小さめに切る" }),
       });
-      expect(savedNote.status).toBe(200);
-      expect(await savedNote.json()).toMatchObject({ note: { targetId: "chicken-thigh", note: "うちでは少し小さめに切る" } });
+      assert.equal(savedNote.status, 200);
+      assert.partialDeepStrictEqual(await savedNote.json(), { note: { targetId: "chicken-thigh", note: "うちでは少し小さめに切る" } });
 
       const notes = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`);
-      expect(await notes.json()).toMatchObject({ notes: [{ targetType: "ingredient", targetId: "chicken-thigh" }] });
+      const notesBody = await notes.json() as { notes: Array<{ targetType: string; targetId: string }> };
+      assert.equal(notesBody.notes.length, 1);
+      assert.partialDeepStrictEqual(notesBody.notes[0], { targetType: "ingredient", targetId: "chicken-thigh" });
 
       const invalidNote = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetType: "step", targetId: "missing", note: "invalid" }),
       });
-      expect(invalidNote.status).toBe(400);
+      assert.equal(invalidNote.status, 400);
 
       config.enableWrites = false;
       const disabledWrite = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`, {
@@ -90,22 +94,22 @@ describe("api", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetType: "recipe", targetId: "oyakodon-basic", note: "blocked" }),
       });
-      expect(disabledWrite.status).toBe(403);
+      assert.equal(disabledWrite.status, 403);
       const disabledRead = await fetch(`${baseUrl}/api/recipes/oyakodon-basic/notes`);
-      expect(disabledRead.status).toBe(403);
+      assert.equal(disabledRead.status, 403);
 
       const missingDetail = await fetch(`${baseUrl}/api/recipes/missing`);
-      expect(missingDetail.status).toBe(404);
-      expect(await missingDetail.json()).toEqual({ error: "recipe_not_found" });
+      assert.equal(missingDetail.status, 404);
+      assert.deepEqual(await missingDetail.json(), { error: "recipe_not_found" });
 
       const unknownApi = await fetch(`${baseUrl}/api/unknown`);
-      expect(unknownApi.status).toBe(404);
-      expect(unknownApi.headers.get("content-type")).toContain("application/json");
-      expect(await unknownApi.json()).toEqual({ error: "not_found" });
+      assert.equal(unknownApi.status, 404);
+      assert.ok(unknownApi.headers.get("content-type")?.includes("application/json"));
+      assert.deepEqual(await unknownApi.json(), { error: "not_found" });
 
       const spa = await fetch(`${baseUrl}/recipes/oyakodon-basic`);
-      expect(spa.status).toBe(200);
-      expect(await spa.text()).toContain("<title>recipe-app</title>");
+      assert.equal(spa.status, 200);
+      assert.ok((await spa.text()).includes("<title>recipe-app</title>"));
     });
   });
 
@@ -122,8 +126,8 @@ describe("api", () => {
     try {
       await withServer(app, async (baseUrl) => {
         const response = await fetch(`${baseUrl}/health`);
-        expect(response.status).toBe(500);
-        expect(await response.json()).toEqual({ error: "internal_error" });
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { error: "internal_error" });
       });
     } finally {
       console.error = originalConsoleError;

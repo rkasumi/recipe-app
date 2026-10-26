@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import { validateRecipeFile, validateRecipeValue } from "../src/domain/recipeValidation";
 import type { RecipeDocument } from "../src/shared/recipe";
 
@@ -10,10 +11,10 @@ describe("recipe validation", () => {
   it("sample recipe passes schema and source/flow audit", () => {
     const report = validateRecipeFile(fixturePath);
 
-    expect(report.valid).toBe(true);
-    expect(report.schemaErrors).toEqual([]);
-    expect(report.auditErrors).toEqual([]);
-    expect(report.auditWarnings).toContain("三つ葉は任意材料として扱った。");
+    assert.equal(report.valid, true);
+    assert.deepEqual(report.schemaErrors, []);
+    assert.deepEqual(report.auditErrors, []);
+    assert.ok(report.auditWarnings.includes("三つ葉は任意材料として扱った。"));
   });
 
   it("detects flow references that schema alone cannot catch", () => {
@@ -22,9 +23,9 @@ describe("recipe validation", () => {
 
     const report = validateRecipeValue(recipe);
 
-    expect(report.schemaValid).toBe(true);
-    expect(report.valid).toBe(false);
-    expect(report.auditErrors).toContain("flow edge edge-sauce-simmer references missing target node missing-node");
+    assert.equal(report.schemaValid, true);
+    assert.equal(report.valid, false);
+    assert.ok(report.auditErrors.includes("flow edge edge-sauce-simmer references missing target node missing-node"));
   });
 
   it("rejects invalid URI and date-time formats", () => {
@@ -34,10 +35,8 @@ describe("recipe validation", () => {
 
     const report = validateRecipeValue(recipe);
 
-    expect(report.schemaValid).toBe(false);
-    expect(report.schemaErrors).toEqual(expect.arrayContaining([
-      expect.stringContaining("format \"date-time\""),
-      expect.stringContaining("format \"uri\""),
-    ]));
+    assert.equal(report.schemaValid, false);
+    assert.ok(report.schemaErrors.some((message) => message.includes('format "date-time"')));
+    assert.ok(report.schemaErrors.some((message) => message.includes('format "uri"')));
   });
 });

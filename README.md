@@ -1,6 +1,6 @@
 # recipe-app
 
-Self-hosted recipe management app. Recipe JSON files are the source of truth, the CLI batch validates schema/audit data and generates SQLite, and the web app reads from SQLite/API. The first version is read-only in the browser and does not provide web editing.
+Self-hosted recipe management app. Recipe JSON files are the source of truth, the CLI batch validates schema/audit data and generates SQLite, and the web app reads from SQLite/API. Recipe content is read-only in the browser; personal notes can be edited when writes are enabled behind an authenticated reverse proxy and are stored separately in `journal.sqlite`.
 
 ## Quickstart
 
@@ -70,6 +70,11 @@ docker compose -f compose.example.yml config
 ```
 
 Docker daemon や network が必要な check は、実行環境に応じて実施します。
+
+lintはBiome、単体・API・SQLite統合テストはNode.js標準の `node:test` / `node:assert/strict` を使います。
+`pnpm test` は `tsx` でTypeScriptを読み込み、`tests/*.test.ts` を各テスト10秒の上限で実行します。
+テストはfixtureと一時ディレクトリだけを使い、実レシピや既存の `journal.sqlite` は対象にしません。
+依存更新のグループ化、脆弱性報告の分類、検証手順は [SECURITY.md](./SECURITY.md) を参照してください。
 
 ## Self-hosting example
 
